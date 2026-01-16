@@ -1,0 +1,73 @@
+name: Deploy Laravel (Botble CMS) via LFTP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: gd, zip, curl
+          tools: composer
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: |
+          composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Publish CMS assets
+        run: |
+          php artisan cms:publish:assets
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: |
+          npm ci
+
+      - name: Build assets (laravel-mix)
+        env:
+          npm_config_theme: ''
+          npm_config_plugin: ''
+          npm_config_package: ''
+          npm_config_core: ''
+        run: |
+          npm run production
+
+      - name: 🚀 Deploy via LFTP (Fast & Incremental)
+        run: |
+          sudo apt-get update && sudo apt-get install -y lftp
+          lftp -c "
+          set sftp:auto-confirm yes;
+          set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';
+          open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} sftp://${{ secrets.FTP_HOST }};
+          mirror -R ./ ${{ secrets.FTP_REMOTE_PATH }} \
+            --delete \
+            --ignore-time \
+            --parallel=8 \
+            --verbose \
+            --exclude .git/ \
+            --exclude .github/ \
+            --exclude node_modules/ \
+            --exclude tests/ \
+            --exclude storage/framework/sessions/ \
+            --exclude storage/framework/cache/ \
+            --exclude storage/framework/views/ \
+            --exclude storage/logs/ \
+            --exclude storage/debugbar/ \
+            --exclude .env;
+          quit;
+          "
