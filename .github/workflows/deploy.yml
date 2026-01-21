@@ -12,8 +12,35 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Needed to detect changed files
+
+      - name: Detect changed files
+        id: changes
+        run: |
+          # Check if composer files changed
+          if git diff --name-only HEAD~1 HEAD | grep -E "(composer\.(json|lock))"; then
+            echo "composer_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "composer_changed=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if package files changed
+          if git diff --name-only HEAD~1 HEAD | grep -E "(package(-lock)?\.json|webpack\.mix\.js)"; then
+            echo "assets_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "assets_changed=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Check if migration files changed
+          if git diff --name-only HEAD~1 HEAD | grep -E "database/migrations/"; then
+            echo "migrations_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "migrations_changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Setup PHP
+        if: steps.changes.outputs.composer_changed == 'true' || steps.changes.outputs.migrations_changed == 'true'
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -21,24 +48,29 @@ jobs:
           tools: composer
           coverage: none
 
-      - name: Install Composer dependencies
+      - name: Install Composer dependencies (only if composer files changed)
+        if: steps.changes.outputs.composer_changed == 'true'
         run: |
           composer install --no-dev --prefer-dist --no-interaction --no-progress
 
-      - name: Publish CMS assets
+      - name: Publish CMS assets (only if composer changed)
+        if: steps.changes.outputs.composer_changed == 'true'
         run: |
           php artisan cms:publish:assets
 
       - name: Setup Node.js
+        if: steps.changes.outputs.assets_changed == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Node dependencies
+      - name: Install Node dependencies (only if package files changed)
+        if: steps.changes.outputs.assets_changed == 'true'
         run: |
           npm ci
 
-      - name: Build assets (laravel-mix)
+      - name: Build assets (only if assets changed)
+        if: steps.changes.outputs.assets_changed == 'true'
         env:
           npm_config_theme: ''
           npm_config_plugin: ''
@@ -47,16 +79,16 @@ jobs:
         run: |
           npm run production
 
-      - name: 🚀 Deploy via LFTP (Fast & Incremental)
+      - name: 🚀 Deploy via LFTP (Sync Changed Files Only)
         run: |
           sudo apt-get update && sudo apt-get install -y lftp
           lftp -c "
-          set sftp:auto-confirm yes;
-          set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';
-          open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} sftp://${{ secrets.FTP_HOST }};
+            set ftp:ssl-force true;
+            set ftp:ssl-protect-data true;
+            set ftp:passive-mode yes;
+            open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} ftp://${{ secrets.FTP_HOST }};
           mirror -R ./ ${{ secrets.FTP_REMOTE_PATH }} \
-            --delete \
-            --ignore-time \
+            --only-newer \
             --parallel=8 \
             --verbose \
             --exclude .git/ \
@@ -69,5 +101,17 @@ jobs:
             --exclude storage/logs/ \
             --exclude storage/debugbar/ \
             --exclude .env;
+          quit;
+          "
+
+      - name: 🔄 Run migrations (only if migration files changed)
+        if: steps.changes.outputs.migrations_changed == 'true'
+        run: |
+          lftp -c "
+          set sftp:auto-confirm yes;
+          set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';
+          open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} sftp://${{ secrets.FTP_HOST }};
+          cd ${{ secrets.FTP_REMOTE_PATH }};
+          !ssh -o StrictHostKeyChecking=no -p ${{ secrets.FTP_PORT }} ${{ secrets.FTP_USERNAME }}@${{ secrets.FTP_HOST }} 'cd ${{ secrets.FTP_REMOTE_PATH }} && php artisan migrate --force';
           quit;
           "
