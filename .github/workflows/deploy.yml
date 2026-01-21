@@ -116,35 +116,52 @@ jobs:
 
       - name: 🚀 Deploy via LFTP (Sync Changed Files Only)
         run: |
+          # Get list of changed files since last commit
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No files changed. Skipping FTP sync."
+            exit 0
+          fi
+
+          # Build LFTP script with changed files only
+          LFTP_SCRIPT=$(mktemp)
+          echo "set ftp:ssl-force true;" >> "$LFTP_SCRIPT"
+          echo "set ftp:ssl-protect-data true;" >> "$LFTP_SCRIPT"
+          echo "set ftp:passive-mode yes;" >> "$LFTP_SCRIPT"
+          echo "set net:timeout 30;" >> "$LFTP_SCRIPT"
+          echo "set net:max-retries 3;" >> "$LFTP_SCRIPT"
+          echo "set net:connection-limit 8;" >> "$LFTP_SCRIPT"
+          echo "set ssl:verify-certificate no;" >> "$LFTP_SCRIPT"
+          echo "set debug 3;" >> "$LFTP_SCRIPT"
+          echo "set sftp:auto-confirm yes;" >> "$LFTP_SCRIPT"
+          echo "set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';" >> "$LFTP_SCRIPT"
+          echo "open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ steps.conn.outputs.port }} ${{ steps.conn.outputs.proto }}://${{ steps.conn.outputs.host }};" >> "$LFTP_SCRIPT"
+
+          echo "Uploading changed files:"
+          while IFS= read -r FILE; do
+            # Skip if file doesn't exist locally (was deleted)
+            if [ ! -f "$FILE" ]; then
+              echo "  [DELETE] $FILE"
+              echo "rm '$FILE';" >> "$LFTP_SCRIPT"
+              continue
+            fi
+            
+            # Skip excluded files
+            if echo "$FILE" | grep -E '(^\.git/|^\.github/|^node_modules/|^tests/|^storage/logs/|^storage/debugbar/|^\.env)' > /dev/null; then
+              continue
+            fi
+            
+            echo "  [UPLOAD] $FILE"
+            echo "put '$FILE' -o '$FILE';" >> "$LFTP_SCRIPT"
+          done <<< "$CHANGED_FILES"
+
+          echo "quit;" >> "$LFTP_SCRIPT"
+
+          # Execute LFTP script
           sudo apt-get update && sudo apt-get install -y lftp
-          lftp -c "
-            set ftp:ssl-force true;
-            set ftp:ssl-protect-data true;
-            set ftp:passive-mode yes;
-            set net:timeout 30;
-            set net:max-retries 3;
-            set net:connection-limit 8;
-            set ssl:verify-certificate no;
-            set debug 3;
-            set sftp:auto-confirm yes;
-            set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';
-            open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ steps.conn.outputs.port }} ${{ steps.conn.outputs.proto }}://${{ steps.conn.outputs.host }};
-          mirror -R ./ ${{ secrets.FTP_REMOTE_PATH }} \
-            --only-newer \
-            --parallel=8 \
-            --verbose \
-            --exclude .git/ \
-            --exclude .github/ \
-            --exclude node_modules/ \
-            --exclude tests/ \
-            --exclude storage/framework/sessions/ \
-            --exclude storage/framework/cache/ \
-            --exclude storage/framework/views/ \
-            --exclude storage/logs/ \
-            --exclude storage/debugbar/ \
-            --exclude .env;
-          quit;
-          "
+          lftp -f "$LFTP_SCRIPT"
+          rm "$LFTP_SCRIPT"
 
       - name: 🔄 Run migrations (only if migration files changed)
         if: steps.changes.outputs.migrations_changed == 'true'
