@@ -80,6 +80,15 @@ jobs:
         run: |
           npm run production
 
+      - name: Verify DNS and port connectivity
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y dnsutils netcat-openbsd
+          echo "Resolving ${FTP_HOST}" && nslookup ${FTP_HOST}
+          echo "Testing TCP connectivity to ${FTP_HOST}:${FTP_PORT}" && nc -zv -w 10 ${FTP_HOST} ${FTP_PORT}
+
       - name: 🚀 Deploy via LFTP (Sync Changed Files Only)
         run: |
           sudo apt-get update && sudo apt-get install -y lftp
@@ -87,6 +96,11 @@ jobs:
             set ftp:ssl-force true;
             set ftp:ssl-protect-data true;
             set ftp:passive-mode yes;
+            set net:timeout 30;
+            set net:max-retries 3;
+            set net:connection-limit 8;
+            set ssl:verify-certificate no;
+            set debug 3;
             open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} ftp://${{ secrets.FTP_HOST }};
           mirror -R ./ ${{ secrets.FTP_REMOTE_PATH }} \
             --only-newer \
