@@ -116,6 +116,9 @@ jobs:
 
       - name: 🚀 Deploy via LFTP (Sync Changed Files Only)
         run: |
+          # Install lftp first
+          sudo apt-get update && sudo apt-get install -y lftp
+          
           # Get list of changed files since last commit
           CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
           
@@ -158,7 +161,7 @@ jobs:
           echo "quit;" >> "$LFTP_SCRIPT"
 
           # Execute LFTP script
-          sudo apt-get update && sudo apt-get install -y lftp
+          echo "Executing FTP sync..."
           lftp -f "$LFTP_SCRIPT"
           rm "$LFTP_SCRIPT"
 
