@@ -89,16 +89,14 @@ jobs:
         id: conn
         run: |
           sudo apt-get update && sudo apt-get install -y dnsutils netcat-openbsd
-          HOST="${FTP_HOST}"
-          echo "Resolving $HOST" && nslookup "$HOST" || {
-            echo "DNS lookup failed for $HOST";
-            if [ -n "$FTP_HOST_IP" ]; then
-              echo "Falling back to provided IP: $FTP_HOST_IP";
-              HOST="$FTP_HOST_IP";
-            else
-              echo "No IP fallback provided (set secret FTP_HOST_IP)";
-            fi
-          }
+
+          if [ -n "$FTP_HOST_IP" ]; then
+            HOST="$FTP_HOST_IP"
+            echo "Using provided IP for host: [redacted]"
+          else
+            HOST="$FTP_HOST"
+            echo "Resolving $HOST" && nslookup "$HOST" || true
+          fi
 
           # Try FTP port first; if closed, try SFTP
           if [ -n "$FTP_PORT" ] && nc -zv -w 7 "$HOST" "$FTP_PORT"; then
