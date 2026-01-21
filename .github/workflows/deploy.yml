@@ -84,10 +84,37 @@ jobs:
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_HOST_IP: ${{ secrets.FTP_HOST_IP }}
+          FTP_SFTP_PORT: ${{ secrets.FTP_SFTP_PORT }}
+        id: conn
         run: |
           sudo apt-get update && sudo apt-get install -y dnsutils netcat-openbsd
-          echo "Resolving ${FTP_HOST}" && nslookup ${FTP_HOST}
-          echo "Testing TCP connectivity to ${FTP_HOST}:${FTP_PORT}" && nc -zv -w 10 ${FTP_HOST} ${FTP_PORT}
+          HOST="${FTP_HOST}"
+          echo "Resolving $HOST" && nslookup "$HOST" || {
+            echo "DNS lookup failed for $HOST";
+            if [ -n "$FTP_HOST_IP" ]; then
+              echo "Falling back to provided IP: $FTP_HOST_IP";
+              HOST="$FTP_HOST_IP";
+            else
+              echo "No IP fallback provided (set secret FTP_HOST_IP)";
+            fi
+          }
+
+          # Try FTP port first; if closed, try SFTP
+          if [ -n "$FTP_PORT" ] && nc -zv -w 7 "$HOST" "$FTP_PORT"; then
+            PROTO="ftp"; PORT="$FTP_PORT";
+            echo "Using FTP on $HOST:$PORT";
+          elif nc -zv -w 7 "$HOST" "${FTP_SFTP_PORT:-22}"; then
+            PROTO="sftp"; PORT="${FTP_SFTP_PORT:-22}";
+            echo "Using SFTP on $HOST:$PORT";
+          else
+            echo "Neither FTP ($FTP_PORT) nor SFTP (${FTP_SFTP_PORT:-22}) reachable for $HOST";
+            exit 1;
+          fi
+
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "proto=$PROTO" >> "$GITHUB_OUTPUT"
+          echo "port=$PORT" >> "$GITHUB_OUTPUT"
 
       - name: 🚀 Deploy via LFTP (Sync Changed Files Only)
         run: |
@@ -101,7 +128,9 @@ jobs:
             set net:connection-limit 8;
             set ssl:verify-certificate no;
             set debug 3;
-            open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} ftp://${{ secrets.FTP_HOST }};
+            set sftp:auto-confirm yes;
+            set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';
+            open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ steps.conn.outputs.port }} ${{ steps.conn.outputs.proto }}://${{ steps.conn.outputs.host }};
           mirror -R ./ ${{ secrets.FTP_REMOTE_PATH }} \
             --only-newer \
             --parallel=8 \
