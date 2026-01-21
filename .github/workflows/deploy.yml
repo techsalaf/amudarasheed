@@ -133,7 +133,6 @@ jobs:
           echo "set net:max-retries 3;" >> "$LFTP_SCRIPT"
           echo "set net:connection-limit 8;" >> "$LFTP_SCRIPT"
           echo "set ssl:verify-certificate no;" >> "$LFTP_SCRIPT"
-          echo "set debug 3;" >> "$LFTP_SCRIPT"
           echo "set sftp:auto-confirm yes;" >> "$LFTP_SCRIPT"
           echo "set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';" >> "$LFTP_SCRIPT"
           echo "open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ steps.conn.outputs.port }} ${{ steps.conn.outputs.proto }}://${{ steps.conn.outputs.host }};" >> "$LFTP_SCRIPT"
