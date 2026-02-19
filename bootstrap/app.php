@@ -14,8 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withProviders([
-        // Temporarily disabled - marketplace override service not available in production
-        // App\Providers\MarketplaceOverrideServiceProvider::class,
+        App\Providers\MarketplaceServiceGuardProvider::class,
+        App\Providers\MarketplaceOverrideServiceProvider::class,
     ])
     ->withExceptions(function (Exceptions $exceptions) {
         //
