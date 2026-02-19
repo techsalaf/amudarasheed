@@ -165,14 +165,20 @@ jobs:
           lftp -f "$LFTP_SCRIPT"
           rm "$LFTP_SCRIPT"
 
-      - name: 🔄 Run migrations (only if migration files changed)
+      - name: Decide migration strategy
         if: steps.changes.outputs.migrations_changed == 'true'
+        id: migration_gate
         run: |
-          lftp -c "
-          set sftp:auto-confirm yes;
-          set sftp:connect-program 'ssh -a -x -o StrictHostKeyChecking=no';
-          open -u ${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} sftp://${{ secrets.FTP_HOST }};
-          cd ${{ secrets.FTP_REMOTE_PATH }};
-          !ssh -o StrictHostKeyChecking=no -p ${{ secrets.FTP_PORT }} ${{ secrets.FTP_USERNAME }}@${{ secrets.FTP_HOST }} 'cd ${{ secrets.FTP_REMOTE_PATH }} && php artisan migrate --force';
-          quit;
-          "
+          if [ "${{ steps.conn.outputs.proto }}" != "sftp" ]; then
+            echo "run_migrations=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping migrations: SSH/SFTP is not selected for this server connection."
+          else
+            echo "run_migrations=true" >> "$GITHUB_OUTPUT"
+            echo "Migrations are enabled via SSH on ${{ steps.conn.outputs.host }}:${{ steps.conn.outputs.port }}"
+          fi
+
+      - name: 🔄 Run migrations (best effort)
+        if: steps.changes.outputs.migrations_changed == 'true' && steps.migration_gate.outputs.run_migrations == 'true'
+        continue-on-error: true
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 -p "${{ steps.conn.outputs.port }}" "${{ secrets.FTP_USERNAME }}@${{ steps.conn.outputs.host }}" "cd '${{ secrets.FTP_REMOTE_PATH }}' && php artisan migrate --force"
