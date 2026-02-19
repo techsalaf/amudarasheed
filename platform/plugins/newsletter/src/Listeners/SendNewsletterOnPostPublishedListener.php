@@ -9,11 +9,10 @@ use Botble\Base\Facades\Html;
 use Botble\Blog\Models\Post;
 use Botble\Newsletter\Enums\NewsletterStatusEnum;
 use Botble\Newsletter\Models\Newsletter;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
-class SendNewsletterOnPostPublishedListener implements ShouldQueue
+class SendNewsletterOnPostPublishedListener
 {
     public function handle(CreatedContentEvent|UpdatedContentEvent $event): void
     {
