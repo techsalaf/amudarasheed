@@ -1,0 +1,19 @@
+{
+  "name": "botble/ai-assistant",
+  "description": "AI Assistant plugin for Botble CMS",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Botble",
+      "email": "hello@botble.com"
+    }
+  ],
+  "require": {
+    "php": "^8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Botble\\AiAssistant\\": "src/"
+    }
+  }
+}

@@ -34,6 +34,11 @@
 
         {!! rescue(fn () => app(Tighten\Ziggy\BladeRouteGenerator::class)->generate(), report: false) !!}
 
+        <!-- AI Assistant Scripts -->
+        <script src="{{ asset('vendor/core/plugins/ai-assistant/js/ai-inline-generator.js') }}"></script>
+        <link rel="stylesheet" href="{{ asset('vendor/core/plugins/ai-assistant/css/ai-inline-generator.css') }}">
+        <!-- End AI Assistant Scripts -->
+
         @if(App::hasDebugModeEnabled())
             <x-core::debug-badge />
         @endif

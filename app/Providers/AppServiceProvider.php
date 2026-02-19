@@ -13,7 +13,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Override MarketplaceService to bypass credential validation
+        $this->app->bind(
+            \Botble\PluginManagement\Services\MarketplaceService::class,
+            \App\Services\CustomMarketplaceService::class
+        );
     }
 
     /**
@@ -23,5 +27,13 @@ class AppServiceProvider extends ServiceProvider
     {
         // Push our middleware globally so it applies on all requests
         $this->app->make(HttpKernel::class)->pushMiddleware(SubdirectoryFix::class);
+
+        // Override marketplace routes to use our custom controller
+        if (config('packages.plugin-management.general.enable_marketplace_feature', true)) {
+            $this->app->bind(
+                \Botble\PluginManagement\Http\Controllers\MarketplaceController::class,
+                \App\Http\Controllers\CustomMarketplaceController::class
+            );
+        }
     }
 }

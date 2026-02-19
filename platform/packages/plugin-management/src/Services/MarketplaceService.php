@@ -31,17 +31,27 @@ class MarketplaceService
     {
         $core = Core::make()->getCoreFileData();
 
-        $this->url = $url ?? $core['marketplaceUrl'];
+        $this->url = rtrim(
+            $url ?? Arr::get($core, 'marketplaceUrl', config('packages.plugin-management.general.marketplace_url', '')),
+            '/'
+        );
 
-        $this->token = $token ?? $core['marketplaceToken'];
+        $this->token = $token ?? Arr::get($core, 'marketplaceToken', config('packages.plugin-management.general.marketplace_token'));
 
         $this->publishedPath = storage_path('app/marketplace');
 
-        $this->productId = $core['productId'];
+        $this->productId = Arr::get($core, 'productId', config('packages.plugin-management.general.marketplace_product_id', ''));
 
-        $this->licenseUrl = $core['apiUrl'];
+        $this->licenseUrl = rtrim(
+            Arr::get($core, 'apiUrl', config('packages.plugin-management.general.marketplace_license_url', '')),
+            '/'
+        );
 
-        $this->licenseApiKey = $core['apiKey'];
+        $this->licenseApiKey = Arr::get($core, 'apiKey', config('packages.plugin-management.general.marketplace_license_api_key', ''));
+
+        if (! $this->url || ! $this->token) {
+            throw new Exception('Marketplace configuration is missing. Please provide marketplace credentials or disable the marketplace feature.');
+        }
     }
 
     public function callApi(string $method, string $path, array $request = []): JsonResponse|Response

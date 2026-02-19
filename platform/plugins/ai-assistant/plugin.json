@@ -1,0 +1,11 @@
+{
+    "id": "botble/ai-assistant",
+    "name": "AI Assistant",
+    "namespace": "Botble\\AiAssistant\\",
+    "provider": "Botble\\AiAssistant\\Providers\\AiAssistantServiceProvider",
+    "author": "Botble",
+    "url": "https://botble.com",
+    "version": "1.0.0",
+    "description": "Comprehensive AI-powered content generation with support for multiple providers, API key management, usage tracking, and custom instructions.",
+    "minimum_core_version": "7.0.0"
+}
