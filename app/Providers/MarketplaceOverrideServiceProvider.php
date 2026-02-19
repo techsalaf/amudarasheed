@@ -13,11 +13,13 @@ class MarketplaceOverrideServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Override MarketplaceService with our custom implementation
+        // Override MarketplaceService with our custom implementation only if the custom class exists
         // Use bind instead of singleton to match Laravel's default behavior
-        $this->app->bind(MarketplaceService::class, function ($app) {
-            return new CustomMarketplaceService();
-        });
+        if (class_exists(CustomMarketplaceService::class)) {
+            $this->app->bind(MarketplaceService::class, function ($app) {
+                return new CustomMarketplaceService();
+            });
+        }
     }
 
     /**
